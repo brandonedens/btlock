@@ -38,6 +38,7 @@
  * Include Files
  */
 #include <assert.h>
+#include <getopt.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,12 +58,63 @@
 #define LOCK_CHECK_DELAY (10)
 
 /*******************************************************************************
+ * Macros
+ */
+/** Print the given message only when verbosity is greater than 0. */
+#define VERBOSE(...) do { \
+    if (verbosity > 0) { \
+        printf(__VA_ARGS__); \
+    } \
+} while (0)
+
+/*******************************************************************************
+ * Local Variables
+ */
+/**
+ * The amount of onscreen chatter to emit when the program is running, this
+ * is naturally no message if no malfunctions occur.
+ */
+static int verbosity = 0;
+
+/*******************************************************************************
  * Local Functions
  */
 
 static bool screen_locked(void);
 
 /******************************************************************************/
+
+/**
+ * Continuously attempt to lock computer if Bluetooth ping returns false.
+ */
+static void lock_loop(char *bt_addr, char *hci_dev, int delay)
+{
+    char cmd[LINE_NMAX];
+    // Ensure that Bluetooth device is up and functioning.
+    sprintf(cmd, "sudo hciconfig %s up", hci_dev);
+    int ret = system(cmd);
+    if (ret != 0) {
+        fprintf(stderr, "Falure to bring up the %s device\n", hci_dev);
+        exit(1);
+    }
+
+    // Build the command to execute l2ping checking that Bluetooth device is in
+    // proximity.
+    assert(strlen(bt_addr) + 1 < LINE_NMAX);
+    sprintf(cmd, "l2ping -c 1 %s &> /dev/null", bt_addr);
+
+    while (1) {
+        if (!screen_locked()) {
+            VERBOSE("Pinging remote device: %s\n", bt_addr);
+            int ret = system(cmd);
+            if (ret != 0) {
+                VERBOSE("Now locking screen.\n");
+                system("xscreensaver-command --lock > /dev/null");
+            }
+        }
+        sleep(delay);
+    }
+}
 
 /**
  * Return true or false depending upon whether or not screen is locked.
@@ -81,6 +133,7 @@ static bool screen_locked(void)
         // "screen locked" and if we find them we consider the screen currently
         // locked. Otherwise we indicate that the screen is not locked.
         if (strstr(line, "screen locked") != NULL) {
+            VERBOSE("Screen already locked.\n");
             pclose(fp);
             return true;
         }
@@ -91,32 +144,54 @@ static bool screen_locked(void)
 
 int main(int argc, char *argv[])
 {
-    if (argc != 2) {
-        fprintf(stderr, "Please supply BT address ie 11:22:33:44:55:66\n");
-        return 0;
+    char hci_dev[LINE_NMAX] = HCI_DEV;
+    int lock_delay = LOCK_CHECK_DELAY;
+
+    while (1) {
+        static const struct option long_opts[] = {
+            {"verbose",   no_argument,       0, 'v'},
+            {"interface", required_argument, 0, 'i'},
+            {"sleep",     required_argument, 0, 's'},
+            {0,           0,                 0,   0}
+        };
+        int idx = 0;
+
+        int opt = getopt_long(argc, argv, "i:s:v", long_opts, &idx);
+        if (opt == -1) {
+            break;
+        }
+
+        switch (opt) {
+        case 'i':
+            strcpy(hci_dev, optarg);
+            break;
+        case 's':
+            lock_delay = atoi(optarg);
+            break;
+        case 'v':
+            ++verbosity;
+            break;
+        default:
+            abort();
+        }
     }
 
-    // Ensure that Bluetooth device is up and functioning.
-    int ret = system("sudo hciconfig " HCI_DEV " up");
-    if (ret != 0) {
-        fprintf(stderr, "Falure to bring up the " HCI_DEV " device.\n");
+    if (verbosity > 0) {
+        VERBOSE("Using bluetooth address: %s\n", argv[optind]);
+        VERBOSE("HCI device: %s\n", hci_dev);
+        VERBOSE("and sleep delay: %d\n", lock_delay);
+
+    }
+
+    if (optind >= argc) {
+        fprintf(stderr, "Please supply BT address ie 11:22:33:44:55:66\n");
+        return 1;
+    }
+    if (strlen(argv[optind]) != strlen("11:22:33:44:55:66")) {
+        fprintf(stderr, "BT address must be of form: 11:22:33:44:55:66\n");
         return 1;
     }
 
-    // Build the command to execute l2ping checking that Bluetooth device is in
-    // proximity.
-    assert(strlen(argv[1]) + 1 < LINE_NMAX);
-    char lock_cmd[LINE_NMAX];
-    sprintf(lock_cmd, "l2ping -c 1 %s &> /dev/null", argv[1]);
-
-    while (1) {
-        if (!screen_locked()) {
-            int ret = system(lock_cmd);
-            if (ret != 0) {
-                system("xscreensaver-command --lock > /dev/null");
-            }
-        }
-        sleep(LOCK_CHECK_DELAY);
-    }
+    lock_loop(argv[optind], hci_dev, lock_delay);
 }
 
