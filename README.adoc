@@ -1,0 +1,47 @@
+
+Bluetooth Lock
+==============
+:author: Brandon Edens <brandonedens@gmail.com>
+:date: 2013-11-09
+
+Introduction
+------------
+
+Greetings and congratulations as you are now the proud owner of the Bluetooth
+locking software designed for ensuring that your computer locks automatically
+when you and your Bluetooth device stray too far from the machine. To accomplish
+this feat the software periodically pings the Bluetooth address that you specify
+and then uses xscreensaver's locking capability to lock the machine when that
+Bluetooth device is found not to be in range.
+
+By and large this is a nice automated way of ensuring that your computer is not
+left open and unprotected when your more mischevious friends are about.
+
+
+Bugs
+----
+
+Its entirely possible that someone could spoof your Bluetooth device fooling the
+software into keeping your computer unlocked when you assume that this software
+will lock it.
+
+Its also possible that occasionally the Bluetooth ping emitted by this machine
+might go unanswered by the Bluetooth device due to interference or some other
+malfunction which will cause your computer to lock erroneously. In that case,
+unlock your computer and hopefully the next ping will succeed. Recognize though
+that someone could jam Bluetooth communications and DoS your machine by having
+it constantly lock itself. A workaround is to disable btlock.
+
+Finally, all of this is predicated on the functioning of xscreensaver and
+l2ping. If either of those programs are malfunctioning or tampered with then
+this software will not work properly.
+
+Do not rely upon this software when its is absolutely required that your machine
+be locked when you're not present. In that case always make sure your machine is
+locked manually via xscreensaver-command --lock.
+
+License
+-------
+
+This software is licensed under the GNU Public License version 3.
+
